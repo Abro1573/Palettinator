@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Minecraft Color Engine FIXED</title>
+<title>Minecraft Color Engine (ROBUST)</title>
 
 <style>
 body {
@@ -13,48 +13,37 @@ body {
     padding: 20px;
 }
 
-.tabs {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 15px;
-}
+.tabs { display:flex; gap:10px; margin-bottom:15px; }
+.tab { padding:10px; background:#222; cursor:pointer; border-radius:6px; }
+.tab.active { background:#444; }
 
-.tab {
-    padding: 10px;
-    background: #222;
-    cursor: pointer;
-    border-radius: 6px;
-}
-
-.tab.active { background: #444; }
-
-.panel { display: none; }
-.panel.active { display: block; }
+.panel { display:none; }
+.panel.active { display:block; }
 
 .grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-    gap: 10px;
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
+    gap:10px;
 }
 
 .block {
-    background: #222;
-    padding: 10px;
-    border-radius: 8px;
+    background:#222;
+    padding:10px;
+    border-radius:8px;
 }
 
 .swatch {
-    width: 100%;
-    height: 40px;
-    border-radius: 6px;
-    margin-bottom: 5px;
+    width:100%;
+    height:40px;
+    border-radius:6px;
+    margin-bottom:5px;
 }
 </style>
 </head>
 
 <body>
 
-<h1>🧱 Minecraft Color Engine (FIXED)</h1>
+<h1>🧱 Minecraft Color Engine (FIXED FOR REAL)</h1>
 
 <div class="tabs">
     <div class="tab active" onclick="switchTab(0)">Finder</div>
@@ -75,7 +64,7 @@ body {
     <select id="end"></select>
 
     <label>Steps: <span id="stepLabel">5</span></label>
-    <input type="range" min="2" max="20" value="5" id="steps">
+    <input type="range" id="steps" min="2" max="20" value="5">
 
     <div id="gradient" class="grid"></div>
 </div>
@@ -87,7 +76,7 @@ const DATA_URL =
 
 let blocks = {};
 
-// ---------- math ----------
+// ---------------- COLOR ----------------
 function dist(a,b){
     return Math.sqrt(
         (a[0]-b[0])**2 +
@@ -104,49 +93,83 @@ function lerp(a,b,t){
     ];
 }
 
-// ---------- normalize dataset ----------
-function parseBlocks(json){
-    let out = {};
+function hexToRgb(h){
+    h=h.replace("#","");
+    return [
+        parseInt(h.slice(0,2),16),
+        parseInt(h.slice(2,4),16),
+        parseInt(h.slice(4,6),16)
+    ];
+}
 
-    for (let id in json) {
-        let v = json[id];
+// ---------------- NORMALISATION ENGINE ----------------
+function normalize(json){
 
-        // FORMAT A: {color:[r,g,b]}
-        if (Array.isArray(v)) {
-            out[id] = v;
+    const out = {};
+
+    // CASE 1: array format
+    if (Array.isArray(json)) {
+        console.log("FORMAT: array");
+        for (const item of json) {
+            if (item?.name && item?.color) {
+                out[item.name] = item.color;
+            }
         }
+        return out;
+    }
 
-        // FORMAT B: {color:[r,g,b]}
-        else if (v.color) {
-            out[id] = v.color;
+    // CASE 2: object map format
+    if (typeof json === "object") {
+
+        // CASE 2a: wrapped under data
+        if (json.data) json = json.data;
+
+        console.log("FORMAT: object map");
+
+        for (const key in json) {
+
+            const v = json[key];
+
+            if (Array.isArray(v)) {
+                out[key] = v;
+            }
+
+            else if (v?.color) {
+                out[key] = v.color;
+            }
+
+            else if (typeof v === "object") {
+                // fallback deep scan
+                if (Array.isArray(v.rgb)) out[key] = v.rgb;
+                if (Array.isArray(v.colour)) out[key] = v.colour;
+            }
         }
     }
 
     return out;
 }
 
-// ---------- closest ----------
+// ---------------- CLOSEST ----------------
 function closest(rgb){
-    let best=null;
-    let bestD=1e9;
+    let best=null, bestD=1e9;
 
-    for(let name in blocks){
-        let d = dist(rgb, blocks[name]);
-        if(d < bestD){
+    for (let k in blocks){
+        let d = dist(rgb, blocks[k]);
+        if (d < bestD){
             bestD = d;
-            best = name;
+            best = k;
         }
     }
     return best;
 }
 
-// ---------- UI ----------
+// ---------------- UI ----------------
 function updateFinder(){
-    if(!Object.keys(blocks).length) return;
+    if (!Object.keys(blocks).length) return;
 
-    let rgb = hexToRgb(picker.value);
+    const rgb = hexToRgb(picker.value);
 
-    let sorted = Object.entries(blocks)
+    const sorted = Object.entries(blocks)
         .map(([name,c])=>({
             name,
             rgb:c,
@@ -155,59 +178,50 @@ function updateFinder(){
         .sort((a,b)=>a.score-b.score)
         .slice(0,30);
 
-    results.innerHTML="";
+    results.innerHTML = "";
 
-    sorted.forEach(b=>{
-        let div=document.createElement("div");
-        div.className="block";
-
-        div.innerHTML=`
+    for (const b of sorted){
+        const el = document.createElement("div");
+        el.className="block";
+        el.innerHTML = `
             <div class="swatch" style="background:rgb(${b.rgb})"></div>
             <b>${b.name}</b>
         `;
-
-        results.appendChild(div);
-    });
+        results.appendChild(el);
+    }
 }
 
+// ---------------- GRADIENT ----------------
 function updateGradient(){
-    if(!Object.keys(blocks).length) return;
 
-    let a = blocks[start.value];
-    let b = blocks[end.value];
-    let steps = +stepsInput.value;
+    if (!Object.keys(blocks).length) return;
+
+    const a = blocks[start.value];
+    const b = blocks[end.value];
+    const steps = +document.getElementById("steps").value;
 
     stepLabel.innerText = steps;
-    gradient.innerHTML="";
+    gradient.innerHTML = "";
 
-    for(let i=0;i<steps;i++){
-        let t=i/(steps-1);
-        let rgb=lerp(a,b,t);
-        let match=closest(rgb);
+    for (let i=0;i<steps;i++){
 
-        let div=document.createElement("div");
-        div.className="block";
+        const t = i/(steps-1);
+        const rgb = lerp(a,b,t);
+        const match = closest(rgb);
 
-        div.innerHTML=`
+        const el = document.createElement("div");
+        el.className="block";
+
+        el.innerHTML = `
             <div class="swatch" style="background:rgb(${blocks[match]})"></div>
             <b>${match}</b>
         `;
 
-        gradient.appendChild(div);
+        gradient.appendChild(el);
     }
 }
 
-// ---------- helpers ----------
-function hexToRgb(hex){
-    hex=hex.replace("#","");
-    return [
-        parseInt(hex.slice(0,2),16),
-        parseInt(hex.slice(2,4),16),
-        parseInt(hex.slice(4,6),16)
-    ];
-}
-
-// ---------- tabs ----------
+// ---------------- TABS ----------------
 function switchTab(i){
     document.querySelectorAll(".tab").forEach((t,idx)=>{
         t.classList.toggle("active", idx===i);
@@ -218,58 +232,38 @@ function switchTab(i){
     });
 }
 
-// ---------- load data ----------
+// ---------------- LOAD ----------------
 async function load(){
-    try {
-        console.log("Fetching dataset...");
 
-        const res = await fetch(DATA_URL);
+    console.log("Fetching dataset...");
 
-        console.log("HTTP status:", res.status);
+    const res = await fetch(DATA_URL);
+    const json = await res.json();
 
-        const json = await res.json();
+    console.log("RAW TYPE:", typeof json);
+    console.log("RAW SAMPLE:", json);
 
-        console.log("RAW JSON sample:", Object.keys(json).slice(0,5));
+    blocks = normalize(json);
 
-        blocks = {};
+    console.log("BLOCK COUNT:", Object.keys(blocks).length);
 
-        for (let id in json) {
-            if (json[id]?.color) {
-                blocks[id] = json[id].color;
-            }
-        }
-
-        console.log("Parsed blocks:", Object.keys(blocks).length);
-
-        if (Object.keys(blocks).length === 0) {
-            throw new Error("No blocks parsed — dataset format mismatch");
-        }
-
-        // populate UI
-        for(let name in blocks){
-            start.innerHTML += `<option>${name}</option>`;
-            end.innerHTML += `<option>${name}</option>`;
-        }
-
-        picker.oninput = updateFinder;
-        start.onchange = updateGradient;
-        end.onchange = updateGradient;
-        stepsInput.oninput = updateGradient;
-
-        updateFinder();
-        updateGradient();
-
-    } catch (e) {
-        console.error("LOAD FAILED:", e);
-        document.body.innerHTML += `
-            <div style="color:red;margin-top:20px;">
-                ❌ Dataset failed to load. Check console.
-            </div>
-        `;
+    if (Object.keys(blocks).length === 0){
+        throw new Error("Dataset parsed to 0 blocks — format mismatch");
     }
-}
 
-let stepsInput = document.getElementById("steps");
+    for (let k in blocks){
+        start.innerHTML += `<option>${k}</option>`;
+        end.innerHTML += `<option>${k}</option>`;
+    }
+
+    picker.oninput = updateFinder;
+    start.onchange = updateGradient;
+    end.onchange = updateGradient;
+    steps.oninput = updateGradient;
+
+    updateFinder();
+    updateGradient();
+}
 
 load();
 
