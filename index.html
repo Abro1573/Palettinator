@@ -221,13 +221,31 @@ function switchTab(i){
 // ---------- load data ----------
 async function load(){
     try {
+        console.log("Fetching dataset...");
+
         const res = await fetch(DATA_URL);
+
+        console.log("HTTP status:", res.status);
+
         const json = await res.json();
 
-        blocks = parseBlocks(json);
+        console.log("RAW JSON sample:", Object.keys(json).slice(0,5));
 
-        console.log("Loaded blocks:", Object.keys(blocks).length);
+        blocks = {};
 
+        for (let id in json) {
+            if (json[id]?.color) {
+                blocks[id] = json[id].color;
+            }
+        }
+
+        console.log("Parsed blocks:", Object.keys(blocks).length);
+
+        if (Object.keys(blocks).length === 0) {
+            throw new Error("No blocks parsed — dataset format mismatch");
+        }
+
+        // populate UI
         for(let name in blocks){
             start.innerHTML += `<option>${name}</option>`;
             end.innerHTML += `<option>${name}</option>`;
@@ -242,8 +260,12 @@ async function load(){
         updateGradient();
 
     } catch (e) {
-        console.error("Failed to load dataset:", e);
-        results.innerHTML = "❌ Failed to load GitHub dataset (check console)";
+        console.error("LOAD FAILED:", e);
+        document.body.innerHTML += `
+            <div style="color:red;margin-top:20px;">
+                ❌ Dataset failed to load. Check console.
+            </div>
+        `;
     }
 }
 
