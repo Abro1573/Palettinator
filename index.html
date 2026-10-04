@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Minecraft Block Color Matcher</title>
+
+<style>
+body {
+    font-family: Arial, sans-serif;
+    background: #111;
+    color: white;
+    margin: 0;
+    padding: 20px;
+}
+
+h1 {
+    margin-bottom: 10px;
+}
+
+.container {
+    max-width: 900px;
+    margin: auto;
+}
+
+input[type="color"] {
+    width: 120px;
+    height: 60px;
+    border: none;
+    cursor: pointer;
+}
+
+#results {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.block {
+    background: #222;
+    padding: 10px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.swatch {
+    width: 40px;
+    height: 40px;
+    border-radius: 6px;
+    border: 1px solid #444;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+    <h1>🎨 Minecraft Block Color Matcher</h1>
+
+    <p>Select a color:</p>
+    <input type="color" id="picker" value="#ff0000">
+
+    <div id="results"></div>
+</div>
+
+<script>
+// 🧱 Small block database (you can expand this massively)
+const blocks = [
+    { name: "Stone", rgb: [125, 125, 125] },
+    { name: "Cobblestone", rgb: [118, 118, 118] },
+    { name: "Oak Planks", rgb: [162, 130, 78] },
+    { name: "Spruce Planks", rgb: [102, 76, 51] },
+    { name: "Dirt", rgb: [134, 96, 67] },
+    { name: "Grass", rgb: [95, 159, 53] },
+    { name: "Sand", rgb: [219, 207, 163] },
+    { name: "Gold Block", rgb: [246, 208, 61] },
+    { name: "Iron Block", rgb: [220, 220, 220] },
+    { name: "Diamond Block", rgb: [83, 227, 214] },
+    { name: "Nether Brick", rgb: [70, 20, 20] },
+    { name: "Obsidian", rgb: [25, 15, 35] },
+];
+
+// 📏 RGB distance function
+function dist(a, b) {
+    return Math.sqrt(
+        (a[0] - b[0]) ** 2 +
+        (a[1] - b[1]) ** 2 +
+        (a[2] - b[2]) ** 2
+    );
+}
+
+// 🎨 hex → rgb
+function hexToRgb(hex) {
+    hex = hex.replace('#', '');
+    return [
+        parseInt(hex.substring(0, 2), 16),
+        parseInt(hex.substring(2, 4), 16),
+        parseInt(hex.substring(4, 6), 16)
+    ];
+}
+
+// 🔍 main matcher
+function update() {
+    const color = hexToRgb(document.getElementById("picker").value);
+
+    const sorted = blocks
+        .map(b => ({
+            ...b,
+            score: dist(color, b.rgb)
+        }))
+        .sort((a, b) => a.score - b.score);
+
+    const results = document.getElementById("results");
+    results.innerHTML = "";
+
+    sorted.forEach(b => {
+        const div = document.createElement("div");
+        div.className = "block";
+
+        const swatch = document.createElement("div");
+        swatch.className = "swatch";
+        swatch.style.background = `rgb(${b.rgb[0]},${b.rgb[1]},${b.rgb[2]})`;
+
+        div.innerHTML = `<div><b>${b.name}</b><br>${Math.round(b.score)}</div>`;
+        div.prepend(swatch);
+
+        results.appendChild(div);
+    });
+}
+
+document.getElementById("picker").addEventListener("input", update);
+
+update();
+</script>
+
+</body>
+</html>
