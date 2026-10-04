@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Minecraft Color Engine (GitHub Data)</title>
+<title>Minecraft Color Engine FIXED</title>
 
 <style>
 body {
@@ -12,8 +12,6 @@ body {
     margin: 0;
     padding: 20px;
 }
-
-h1 { margin-bottom: 10px; }
 
 .tabs {
     display: flex;
@@ -56,28 +54,24 @@ h1 { margin-bottom: 10px; }
 
 <body>
 
-<h1>🧱 Minecraft Color Engine (Live GitHub Data)</h1>
+<h1>🧱 Minecraft Color Engine (FIXED)</h1>
 
 <div class="tabs">
-    <div class="tab active" onclick="switchTab(0)">Block Finder</div>
-    <div class="tab" onclick="switchTab(1)">Gradient Tool</div>
+    <div class="tab active" onclick="switchTab(0)">Finder</div>
+    <div class="tab" onclick="switchTab(1)">Gradient</div>
 </div>
 
-<!-- FINDER -->
 <div class="panel active">
     <input type="color" id="picker">
     <div id="results" class="grid"></div>
 </div>
 
-<!-- GRADIENT -->
 <div class="panel">
 
-    <h3>Gradient Tool</h3>
-
-    <label>Start Block</label>
+    <label>Start</label>
     <select id="start"></select>
 
-    <label>End Block</label>
+    <label>End</label>
     <select id="end"></select>
 
     <label>Steps: <span id="stepLabel">5</span></label>
@@ -88,28 +82,18 @@ h1 { margin-bottom: 10px; }
 
 <script>
 
-// 🌐 REAL DATA FROM GITHUB
 const DATA_URL =
 "https://raw.githubusercontent.com/Pikacnu/mc-color-data/v1/1.21.7/blocks/data.min.json";
 
-let blocks = {}; // will be loaded dynamically
+let blocks = {};
 
-// ================= COLOR MATH =================
+// ---------- math ----------
 function dist(a,b){
     return Math.sqrt(
         (a[0]-b[0])**2 +
         (a[1]-b[1])**2 +
         (a[2]-b[2])**2
     );
-}
-
-function hexToRgb(hex){
-    hex = hex.replace("#","");
-    return [
-        parseInt(hex.slice(0,2),16),
-        parseInt(hex.slice(2,4),16),
-        parseInt(hex.slice(4,6),16)
-    ];
 }
 
 function lerp(a,b,t){
@@ -120,6 +104,28 @@ function lerp(a,b,t){
     ];
 }
 
+// ---------- normalize dataset ----------
+function parseBlocks(json){
+    let out = {};
+
+    for (let id in json) {
+        let v = json[id];
+
+        // FORMAT A: {color:[r,g,b]}
+        if (Array.isArray(v)) {
+            out[id] = v;
+        }
+
+        // FORMAT B: {color:[r,g,b]}
+        else if (v.color) {
+            out[id] = v.color;
+        }
+    }
+
+    return out;
+}
+
+// ---------- closest ----------
 function closest(rgb){
     let best=null;
     let bestD=1e9;
@@ -134,63 +140,74 @@ function closest(rgb){
     return best;
 }
 
-// ================= FINDER =================
+// ---------- UI ----------
 function updateFinder(){
+    if(!Object.keys(blocks).length) return;
+
     let rgb = hexToRgb(picker.value);
 
     let sorted = Object.entries(blocks)
-        .map(([name, c]) => ({
+        .map(([name,c])=>({
             name,
             rgb:c,
-            score: dist(rgb,c)
+            score:dist(rgb,c)
         }))
-        .sort((a,b)=>a.score-b.score);
+        .sort((a,b)=>a.score-b.score)
+        .slice(0,30);
 
     results.innerHTML="";
 
-    sorted.slice(0,30).forEach(b=>{
+    sorted.forEach(b=>{
         let div=document.createElement("div");
         div.className="block";
 
         div.innerHTML=`
             <div class="swatch" style="background:rgb(${b.rgb})"></div>
-            <b>${b.name.replace("minecraft:","")}</b><br>
-            ${Math.round(b.score)}
+            <b>${b.name}</b>
         `;
 
         results.appendChild(div);
     });
 }
 
-// ================= GRADIENT =================
 function updateGradient(){
+    if(!Object.keys(blocks).length) return;
 
     let a = blocks[start.value];
     let b = blocks[end.value];
-    let steps = +document.getElementById("steps").value;
+    let steps = +stepsInput.value;
 
     stepLabel.innerText = steps;
-
     gradient.innerHTML="";
 
     for(let i=0;i<steps;i++){
-        let t = i/(steps-1);
-        let rgb = lerp(a,b,t);
-        let match = closest(rgb);
+        let t=i/(steps-1);
+        let rgb=lerp(a,b,t);
+        let match=closest(rgb);
 
         let div=document.createElement("div");
         div.className="block";
 
         div.innerHTML=`
             <div class="swatch" style="background:rgb(${blocks[match]})"></div>
-            <b>${match.replace("minecraft:","")}</b>
+            <b>${match}</b>
         `;
 
         gradient.appendChild(div);
     }
 }
 
-// ================= TABS =================
+// ---------- helpers ----------
+function hexToRgb(hex){
+    hex=hex.replace("#","");
+    return [
+        parseInt(hex.slice(0,2),16),
+        parseInt(hex.slice(2,4),16),
+        parseInt(hex.slice(4,6),16)
+    ];
+}
+
+// ---------- tabs ----------
 function switchTab(i){
     document.querySelectorAll(".tab").forEach((t,idx)=>{
         t.classList.toggle("active", idx===i);
@@ -201,32 +218,39 @@ function switchTab(i){
     });
 }
 
-// ================= LOAD DATA =================
+// ---------- load data ----------
 async function load(){
-    const res = await fetch(DATA_URL);
-    const json = await res.json();
+    try {
+        const res = await fetch(DATA_URL);
+        const json = await res.json();
 
-    // convert into simple map: name -> rgb
-    for(let id in json){
-        blocks[id] = json[id].color;
+        blocks = parseBlocks(json);
+
+        console.log("Loaded blocks:", Object.keys(blocks).length);
+
+        for(let name in blocks){
+            start.innerHTML += `<option>${name}</option>`;
+            end.innerHTML += `<option>${name}</option>`;
+        }
+
+        picker.oninput = updateFinder;
+        start.onchange = updateGradient;
+        end.onchange = updateGradient;
+        stepsInput.oninput = updateGradient;
+
+        updateFinder();
+        updateGradient();
+
+    } catch (e) {
+        console.error("Failed to load dataset:", e);
+        results.innerHTML = "❌ Failed to load GitHub dataset (check console)";
     }
-
-    // populate dropdowns
-    for(let name in blocks){
-        start.innerHTML += `<option>${name}</option>`;
-        end.innerHTML += `<option>${name}</option>`;
-    }
-
-    picker.oninput = updateFinder;
-    start.onchange = updateGradient;
-    end.onchange = updateGradient;
-    steps.oninput = updateGradient;
-
-    updateFinder();
-    updateGradient();
 }
 
+let stepsInput = document.getElementById("steps");
+
 load();
+
 </script>
 
 </body>
