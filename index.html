@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Minecraft Color Tools</title>
+<title>Minecraft Color Engine (GitHub Data)</title>
 
 <style>
 body {
@@ -12,6 +12,8 @@ body {
     margin: 0;
     padding: 20px;
 }
+
+h1 { margin-bottom: 10px; }
 
 .tabs {
     display: flex;
@@ -26,21 +28,14 @@ body {
     border-radius: 6px;
 }
 
-.tab.active {
-    background: #444;
-}
+.tab.active { background: #444; }
 
-.panel {
-    display: none;
-}
-
-.panel.active {
-    display: block;
-}
+.panel { display: none; }
+.panel.active { display: block; }
 
 .grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
     gap: 10px;
 }
 
@@ -56,33 +51,28 @@ body {
     border-radius: 6px;
     margin-bottom: 5px;
 }
-
-select, input[type=range] {
-    width: 100%;
-    margin: 10px 0;
-}
 </style>
 </head>
 
 <body>
 
-<h1>🧱 Minecraft Color Engine</h1>
+<h1>🧱 Minecraft Color Engine (Live GitHub Data)</h1>
 
 <div class="tabs">
     <div class="tab active" onclick="switchTab(0)">Block Finder</div>
     <div class="tab" onclick="switchTab(1)">Gradient Tool</div>
 </div>
 
-<!-- ================= BLOCK FINDER ================= -->
+<!-- FINDER -->
 <div class="panel active">
-    <input type="color" id="colorPicker" value="#ff0000">
+    <input type="color" id="picker">
     <div id="results" class="grid"></div>
 </div>
 
-<!-- ================= GRADIENT TOOL ================= -->
+<!-- GRADIENT -->
 <div class="panel">
 
-    <h3>Pick Two Blocks</h3>
+    <h3>Gradient Tool</h3>
 
     <label>Start Block</label>
     <select id="start"></select>
@@ -97,18 +87,12 @@ select, input[type=range] {
 </div>
 
 <script>
-// 🧱 Mini dataset (replace with GitHub JSON later)
-const blocks = {
-    Stone: [125,125,125],
-    Dirt: [134,96,67],
-    Grass: [95,159,53],
-    Oak: [162,130,78],
-    Sand: [219,207,163],
-    Gold: [246,208,61],
-    Iron: [220,220,220],
-    Diamond: [83,227,214],
-    Obsidian: [25,15,35]
-};
+
+// 🌐 REAL DATA FROM GITHUB
+const DATA_URL =
+"https://raw.githubusercontent.com/Pikacnu/mc-color-data/v1/1.21.7/blocks/data.min.json";
+
+let blocks = {}; // will be loaded dynamically
 
 // ================= COLOR MATH =================
 function dist(a,b){
@@ -136,7 +120,6 @@ function lerp(a,b,t){
     ];
 }
 
-// find closest block
 function closest(rgb){
     let best=null;
     let bestD=1e9;
@@ -151,9 +134,9 @@ function closest(rgb){
     return best;
 }
 
-// ================= BLOCK FINDER =================
+// ================= FINDER =================
 function updateFinder(){
-    let rgb = hexToRgb(colorPicker.value);
+    let rgb = hexToRgb(picker.value);
 
     let sorted = Object.entries(blocks)
         .map(([name, c]) => ({
@@ -165,13 +148,13 @@ function updateFinder(){
 
     results.innerHTML="";
 
-    sorted.forEach(b=>{
+    sorted.slice(0,30).forEach(b=>{
         let div=document.createElement("div");
         div.className="block";
 
         div.innerHTML=`
             <div class="swatch" style="background:rgb(${b.rgb})"></div>
-            <b>${b.name}</b><br>
+            <b>${b.name.replace("minecraft:","")}</b><br>
             ${Math.round(b.score)}
         `;
 
@@ -179,12 +162,12 @@ function updateFinder(){
     });
 }
 
-// ================= GRADIENT TOOL =================
+// ================= GRADIENT =================
 function updateGradient(){
 
     let a = blocks[start.value];
     let b = blocks[end.value];
-    let steps = parseInt(document.getElementById("steps").value);
+    let steps = +document.getElementById("steps").value;
 
     stepLabel.innerText = steps;
 
@@ -200,14 +183,14 @@ function updateGradient(){
 
         div.innerHTML=`
             <div class="swatch" style="background:rgb(${blocks[match]})"></div>
-            <b>${match}</b>
+            <b>${match.replace("minecraft:","")}</b>
         `;
 
         gradient.appendChild(div);
     }
 }
 
-// ================= TAB SYSTEM =================
+// ================= TABS =================
 function switchTab(i){
     document.querySelectorAll(".tab").forEach((t,idx)=>{
         t.classList.toggle("active", idx===i);
@@ -218,20 +201,32 @@ function switchTab(i){
     });
 }
 
-// ================= INIT =================
-colorPicker.oninput = updateFinder;
+// ================= LOAD DATA =================
+async function load(){
+    const res = await fetch(DATA_URL);
+    const json = await res.json();
 
-for(let name in blocks){
-    start.innerHTML += `<option>${name}</option>`;
-    end.innerHTML += `<option>${name}</option>`;
+    // convert into simple map: name -> rgb
+    for(let id in json){
+        blocks[id] = json[id].color;
+    }
+
+    // populate dropdowns
+    for(let name in blocks){
+        start.innerHTML += `<option>${name}</option>`;
+        end.innerHTML += `<option>${name}</option>`;
+    }
+
+    picker.oninput = updateFinder;
+    start.onchange = updateGradient;
+    end.onchange = updateGradient;
+    steps.oninput = updateGradient;
+
+    updateFinder();
+    updateGradient();
 }
 
-start.onchange = updateGradient;
-end.onchange = updateGradient;
-steps.oninput = updateGradient;
-
-updateFinder();
-updateGradient();
+load();
 </script>
 
 </body>
