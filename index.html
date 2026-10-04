@@ -2,137 +2,236 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Minecraft Block Color Matcher</title>
+<title>Minecraft Color Tools</title>
 
 <style>
 body {
-    font-family: Arial, sans-serif;
+    font-family: Arial;
     background: #111;
     color: white;
     margin: 0;
     padding: 20px;
 }
 
-h1 {
-    margin-bottom: 10px;
-}
-
-.container {
-    max-width: 900px;
-    margin: auto;
-}
-
-input[type="color"] {
-    width: 120px;
-    height: 60px;
-    border: none;
-    cursor: pointer;
-}
-
-#results {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+.tabs {
+    display: flex;
     gap: 10px;
-    margin-top: 20px;
+    margin-bottom: 15px;
+}
+
+.tab {
+    padding: 10px;
+    background: #222;
+    cursor: pointer;
+    border-radius: 6px;
+}
+
+.tab.active {
+    background: #444;
+}
+
+.panel {
+    display: none;
+}
+
+.panel.active {
+    display: block;
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
 }
 
 .block {
     background: #222;
     padding: 10px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
+    border-radius: 8px;
 }
 
 .swatch {
-    width: 40px;
+    width: 100%;
     height: 40px;
     border-radius: 6px;
-    border: 1px solid #444;
+    margin-bottom: 5px;
+}
+
+select, input[type=range] {
+    width: 100%;
+    margin: 10px 0;
 }
 </style>
 </head>
 
 <body>
 
-<div class="container">
-    <h1>🎨 Minecraft Block Color Matcher</h1>
+<h1>🧱 Minecraft Color Engine</h1>
 
-    <p>Select a color:</p>
-    <input type="color" id="picker" value="#ff0000">
+<div class="tabs">
+    <div class="tab active" onclick="switchTab(0)">Block Finder</div>
+    <div class="tab" onclick="switchTab(1)">Gradient Tool</div>
+</div>
 
-    <div id="results"></div>
+<!-- ================= BLOCK FINDER ================= -->
+<div class="panel active">
+    <input type="color" id="colorPicker" value="#ff0000">
+    <div id="results" class="grid"></div>
+</div>
+
+<!-- ================= GRADIENT TOOL ================= -->
+<div class="panel">
+
+    <h3>Pick Two Blocks</h3>
+
+    <label>Start Block</label>
+    <select id="start"></select>
+
+    <label>End Block</label>
+    <select id="end"></select>
+
+    <label>Steps: <span id="stepLabel">5</span></label>
+    <input type="range" min="2" max="20" value="5" id="steps">
+
+    <div id="gradient" class="grid"></div>
 </div>
 
 <script>
-// 🧱 Small block database (you can expand this massively)
-const blocks = [
-    { name: "Stone", rgb: [125, 125, 125] },
-    { name: "Cobblestone", rgb: [118, 118, 118] },
-    { name: "Oak Planks", rgb: [162, 130, 78] },
-    { name: "Spruce Planks", rgb: [102, 76, 51] },
-    { name: "Dirt", rgb: [134, 96, 67] },
-    { name: "Grass", rgb: [95, 159, 53] },
-    { name: "Sand", rgb: [219, 207, 163] },
-    { name: "Gold Block", rgb: [246, 208, 61] },
-    { name: "Iron Block", rgb: [220, 220, 220] },
-    { name: "Diamond Block", rgb: [83, 227, 214] },
-    { name: "Nether Brick", rgb: [70, 20, 20] },
-    { name: "Obsidian", rgb: [25, 15, 35] },
-];
+// 🧱 Mini dataset (replace with GitHub JSON later)
+const blocks = {
+    Stone: [125,125,125],
+    Dirt: [134,96,67],
+    Grass: [95,159,53],
+    Oak: [162,130,78],
+    Sand: [219,207,163],
+    Gold: [246,208,61],
+    Iron: [220,220,220],
+    Diamond: [83,227,214],
+    Obsidian: [25,15,35]
+};
 
-// 📏 RGB distance function
-function dist(a, b) {
+// ================= COLOR MATH =================
+function dist(a,b){
     return Math.sqrt(
-        (a[0] - b[0]) ** 2 +
-        (a[1] - b[1]) ** 2 +
-        (a[2] - b[2]) ** 2
+        (a[0]-b[0])**2 +
+        (a[1]-b[1])**2 +
+        (a[2]-b[2])**2
     );
 }
 
-// 🎨 hex → rgb
-function hexToRgb(hex) {
-    hex = hex.replace('#', '');
+function hexToRgb(hex){
+    hex = hex.replace("#","");
     return [
-        parseInt(hex.substring(0, 2), 16),
-        parseInt(hex.substring(2, 4), 16),
-        parseInt(hex.substring(4, 6), 16)
+        parseInt(hex.slice(0,2),16),
+        parseInt(hex.slice(2,4),16),
+        parseInt(hex.slice(4,6),16)
     ];
 }
 
-// 🔍 main matcher
-function update() {
-    const color = hexToRgb(document.getElementById("picker").value);
+function lerp(a,b,t){
+    return [
+        a[0] + (b[0]-a[0])*t,
+        a[1] + (b[1]-a[1])*t,
+        a[2] + (b[2]-a[2])*t
+    ];
+}
 
-    const sorted = blocks
-        .map(b => ({
-            ...b,
-            score: dist(color, b.rgb)
+// find closest block
+function closest(rgb){
+    let best=null;
+    let bestD=1e9;
+
+    for(let name in blocks){
+        let d = dist(rgb, blocks[name]);
+        if(d < bestD){
+            bestD = d;
+            best = name;
+        }
+    }
+    return best;
+}
+
+// ================= BLOCK FINDER =================
+function updateFinder(){
+    let rgb = hexToRgb(colorPicker.value);
+
+    let sorted = Object.entries(blocks)
+        .map(([name, c]) => ({
+            name,
+            rgb:c,
+            score: dist(rgb,c)
         }))
-        .sort((a, b) => a.score - b.score);
+        .sort((a,b)=>a.score-b.score);
 
-    const results = document.getElementById("results");
-    results.innerHTML = "";
+    results.innerHTML="";
 
-    sorted.forEach(b => {
-        const div = document.createElement("div");
-        div.className = "block";
+    sorted.forEach(b=>{
+        let div=document.createElement("div");
+        div.className="block";
 
-        const swatch = document.createElement("div");
-        swatch.className = "swatch";
-        swatch.style.background = `rgb(${b.rgb[0]},${b.rgb[1]},${b.rgb[2]})`;
-
-        div.innerHTML = `<div><b>${b.name}</b><br>${Math.round(b.score)}</div>`;
-        div.prepend(swatch);
+        div.innerHTML=`
+            <div class="swatch" style="background:rgb(${b.rgb})"></div>
+            <b>${b.name}</b><br>
+            ${Math.round(b.score)}
+        `;
 
         results.appendChild(div);
     });
 }
 
-document.getElementById("picker").addEventListener("input", update);
+// ================= GRADIENT TOOL =================
+function updateGradient(){
 
-update();
+    let a = blocks[start.value];
+    let b = blocks[end.value];
+    let steps = parseInt(document.getElementById("steps").value);
+
+    stepLabel.innerText = steps;
+
+    gradient.innerHTML="";
+
+    for(let i=0;i<steps;i++){
+        let t = i/(steps-1);
+        let rgb = lerp(a,b,t);
+        let match = closest(rgb);
+
+        let div=document.createElement("div");
+        div.className="block";
+
+        div.innerHTML=`
+            <div class="swatch" style="background:rgb(${blocks[match]})"></div>
+            <b>${match}</b>
+        `;
+
+        gradient.appendChild(div);
+    }
+}
+
+// ================= TAB SYSTEM =================
+function switchTab(i){
+    document.querySelectorAll(".tab").forEach((t,idx)=>{
+        t.classList.toggle("active", idx===i);
+    });
+
+    document.querySelectorAll(".panel").forEach((p,idx)=>{
+        p.classList.toggle("active", idx===i);
+    });
+}
+
+// ================= INIT =================
+colorPicker.oninput = updateFinder;
+
+for(let name in blocks){
+    start.innerHTML += `<option>${name}</option>`;
+    end.innerHTML += `<option>${name}</option>`;
+}
+
+start.onchange = updateGradient;
+end.onchange = updateGradient;
+steps.oninput = updateGradient;
+
+updateFinder();
+updateGradient();
 </script>
 
 </body>
